@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>あみだくじ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    input {
+      width: 80%;
+      max-width: 250px;
+      margin: 5px;
+      padding: 8px;
+      font-size: 1em;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 1em;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 6px;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      margin-top: 20px;
+      max-width: 100%;
+    }
+    #results img {
+      max-width: 100px;
+      display: block;
+      margin: 5px auto;
+    }
+    #qrcode {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 あみだくじ 🎯</h1>
+
+  <h3>参加者の名前</h3>
+  <input id="name1" placeholder="例: 太郎"><br>
+  <input id="name2" placeholder="例: 花子"><br>
+  <input id="name3" placeholder="例: 次郎"><br>
+  <input id="name4" placeholder="例: みどり"><br>
+
+  <h3>景品（名前と画像URL）</h3>
+  <input id="item1" placeholder="例: お菓子"><br>
+  <input id="img1" placeholder="画像URL"><br>
+  <input id="item2" placeholder="例: ドリンク"><br>
+  <input id="img2" placeholder="画像URL"><br>
+  <input id="item3" placeholder="例: 映画券"><br>
+  <input id="img3" placeholder="画像URL"><br>
+  <input id="item4" placeholder="例: ハズレ"><br>
+  <input id="img4" placeholder="画像URL"><br>
+
+  <button onclick="startAmida()">あみだくじ開始！</button>
+
+  <canvas id="canvas" width="400" height="400"></canvas>
+
+  <div id="results"></div>
+  <div id="qrcode"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const margin = canvas.width / 5;
+    const height = canvas.height;
+    let lines = [];
+
+    function shuffle(array) {
+      return array.sort(() => Math.random() - 0.5);
+    }
+
+    function drawLines() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      lines = [];
+      for (let i = 1; i <= 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(margin * i, 0);
+        ctx.lineTo(margin * i, height);
+        ctx.stroke();
+      }
+      for (let y = 40; y < height - 40; y += 40) {
+        const x = Math.floor(Math.random() * 3) + 1;
+        lines.push({ x, y });
+        ctx.beginPath();
+        ctx.moveTo(margin * x, y);
+        ctx.lineTo(margin * (x + 1), y);
+        ctx.stroke();
+      }
+    }
+
+    async function animatePath(startIndex, color) {
+      let pos = startIndex + 1;
+      let x = margin * pos;
+      let y = 0;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.strokeStyle = color;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.y > y) {
+          ctx.lineTo(x, line.y);
+          y = line.y;
+        }
+
+        if (line.y === y) {
+          if (line.x === pos) {
+            ctx.lineTo(margin * (pos + 1), y);
+            pos++;
+            x = margin * pos;
+          } else if (line.x === pos - 1) {
+            ctx.lineTo(margin * (pos - 1), y);
+            pos--;
+            x = margin * pos;
+          }
+        }
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      ctx.lineTo(x, height);
+      ctx.stroke();
+      ctx.strokeStyle = "black";
+    }
+
+    async function startAmida() {
+      drawLines();
+
+      const names = [
+        document.getElementById('name1').value || "A",
+        document.getElementById('name2').value || "B",
+        document.getElementById('name3').value || "C",
+        document.getElementById('name4').value || "D"
+      ];
+
+      let items = [
+        { name: document.getElementById('item1').value || "景品1", img: document.getElementById('img1').value },
+        { name: document.getElementById('item2').value || "景品2", img: document.getElementById('img2').value },
+        { name: document.getElementById('item3').value || "景品3", img: document.getElementById('img3').value },
+        { name: document.getElementById('item4').value || "景品4", img: document.getElementById('img4').value }
+      ];
+
+      items = shuffle(items);
+      const results = [];
+
+      for (let i = 0; i < 4; i++) {
+        await animatePath(i, "red");
+        let pos = i + 1;
+        let y = 0;
+        lines.forEach(line => {
+          if (line.y >= y) {
+            if (line.x === pos) pos++;
+            else if (line.x === pos - 1) pos--;
+            y = line.y;
+          }
+        });
+        results.push({ name: names[i], prize: items[pos - 1] });
+      }
+
+      let html = "<h3>🎉 結果発表 🎉</h3>";
+      results.forEach(r => {
+        html += `<strong>${r.name}</strong> → ${r.prize.name}<br>`;
+        if (r.prize.img) html += `<img src="${r.prize.img}" alt="${r.prize.name}"><br>`;
+      });
+      document.getElementById("results").innerHTML = html;
+
+      generateQRCode();
+    }
+
+    function generateQRCode() {
+      const currentURL = location.href;
+      document.getElementById("qrcode").innerHTML = "<h3>🔗 このページを共有</h3>";
+      new QRCode(document.getElementById("qrcode"), {
+        text: currentURL,
+        width: 128,
+        height: 128
+      });
+    }
+  </script>
+</body>
+</html>
